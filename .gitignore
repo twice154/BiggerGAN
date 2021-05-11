@@ -129,3 +129,6 @@ dmypy.json
 
 data/
 logs/
+instance_selection_indices/
+samples/
+weights/
