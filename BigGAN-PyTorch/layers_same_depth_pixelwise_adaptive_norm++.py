@@ -422,7 +422,7 @@ class SpatialModulationGBlock(nn.Module):
     # Conv layers
     self.conv1 = self.which_conv(self.in_channels, self.out_channels)
     self.conv2 = self.which_conv(self.out_channels, self.out_channels)
-    self.modulation = self.which_conv(self.out_channels, int(self.out_channels / 16), kernel_size=1, padding=0)
+    self.modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     # self.learnable_sc = in_channels != out_channels or upsample
     # if self.learnable_sc:
     #   self.conv_sc = self.which_conv(in_channels, out_channels, 
@@ -442,7 +442,6 @@ class SpatialModulationGBlock(nn.Module):
     h = self.activation(h)
     h = self.conv2(h)
     mod = self.modulation(h)
-    mod = mod.repeat(1, 16, 1, 1)
     # if self.learnable_sc:       
     #   x = self.conv_sc(x)
     return h, mod

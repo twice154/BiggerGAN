@@ -13,4 +13,5 @@ python BigGAN-PyTorch/train.py \
 --ema --use_ema --ema_start 2000 \
 --test_every 5000 --save_every 1000 --num_best_copies 5 --num_save_copies 2 --seed 0 \
 --which_best FID --num_iters 500000 --num_epochs 1000 \
---embedding inceptionv3 --density_measure gaussian --retention_ratio 40
+--embedding inceptionv3 --density_measure gaussian --retention_ratio 40 \
+--experiment_name sagan_64_same_depth_pixel16group_adaptive_norm

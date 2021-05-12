@@ -408,46 +408,6 @@ class GBlock(nn.Module):
     return h + x
   
 
-# SpatialModulationBlock for G.
-class SpatialModulationGBlock(nn.Module):
-  def __init__(self, in_channels, out_channels,
-               which_conv=nn.Conv2d, which_bn=bn, activation=None, 
-               upsample=None):
-    super(SpatialModulationGBlock, self).__init__()
-    
-    self.in_channels, self.out_channels = in_channels, out_channels
-    self.which_conv, self.which_bn = which_conv, which_bn
-    self.activation = activation
-    self.upsample = upsample
-    # Conv layers
-    self.conv1 = self.which_conv(self.in_channels, self.out_channels)
-    self.conv2 = self.which_conv(self.out_channels, self.out_channels)
-    self.modulation = self.which_conv(self.out_channels, int(self.out_channels / 16), kernel_size=1, padding=0)
-    # self.learnable_sc = in_channels != out_channels or upsample
-    # if self.learnable_sc:
-    #   self.conv_sc = self.which_conv(in_channels, out_channels, 
-    #                                  kernel_size=1, padding=0)
-    # Batchnorm layers
-    # self.bn1 = self.which_bn(in_channels)
-    # self.bn2 = self.which_bn(out_channels)
-    # upsample layers
-    self.upsample = upsample
-
-  def forward(self, x):
-    h = self.activation(x)
-    if self.upsample:
-      h = self.upsample(h)
-      # x = self.upsample(x)
-    h = self.conv1(h)
-    h = self.activation(h)
-    h = self.conv2(h)
-    mod = self.modulation(h)
-    mod = mod.repeat(1, 16, 1, 1)
-    # if self.learnable_sc:       
-    #   x = self.conv_sc(x)
-    return h, mod
-    
-    
 # Residual block for the discriminator
 class DBlock(nn.Module):
   def __init__(self, in_channels, out_channels, which_conv=SNConv2d, wide=True,

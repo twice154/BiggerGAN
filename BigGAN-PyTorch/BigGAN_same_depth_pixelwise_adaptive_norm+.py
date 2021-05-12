@@ -184,7 +184,7 @@ class Generator(nn.Module):
 
     # Prepare spatial modulation model
     # If not using shared embeddings, self.shared is just a passthrough
-    self.spatial_modulation_shared = (self.which_embedding(n_classes, self.shared_dim)
+    self.spatial_modulation_shared = (self.which_embedding(n_classes, self.shared_dim))
     # First linear layer
     self.spatial_modulation_linear = self.which_linear(self.dim_z + self.shared_dim,
                                     self.arch['in_channels'][0] * (self.bottom_width **2))
@@ -258,20 +258,29 @@ class Generator(nn.Module):
       zs = torch.split(z, self.z_chunk_size, 1)
       z = zs[0]
       ys = [torch.cat([y, item], 1) for item in zs[1:]]
+
+      # Class embedding layer
+      # spatial_c = self.spatial_modulation_shared(y)
+      # Mixing layer
+      spatial_h = self.spatial_modulation_linear(torch.cat([y, z], 1))
+      # Reshape
+      spatial_h = spatial_h.view(spatial_h.size(0), -1, self.bottom_width, self.bottom_width)
     else:
       ys = [y] * len(self.blocks)
+
+      # Class embedding layer
+      spatial_c = self.spatial_modulation_shared(y)
+      # Mixing layer
+      if len(spatial_c.shape) == 3:
+        spatial_c = torch.squeeze(spatial_c, dim=1)
+      spatial_h = self.spatial_modulation_linear(torch.cat([spatial_c, z], 1))
+      # Reshape
+      spatial_h = spatial_h.view(spatial_h.size(0), -1, self.bottom_width, self.bottom_width)
       
     # First linear layer
     h = self.linear(z)
     # Reshape
     h = h.view(h.size(0), -1, self.bottom_width, self.bottom_width)
-
-    # Class embedding layer
-    spatial_c = self.spatial_modulation_shared(y)
-    # Mixing layer
-    spatial_h = self.spatial_modulation_linear(torch.cat([spatial_c, z], 1))
-    # Reshape
-    spatial_h = spatial_h.view(spatial_h.size(0), -1, self.bottom_width, self.bottom_width)
     
     # Loop over blocks
     for index, blocklist in enumerate(self.blocks):
