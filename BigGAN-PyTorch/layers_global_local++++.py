@@ -425,30 +425,14 @@ class SpatialModulationGBlock(nn.Module):
     # Modulation layers
     self.global_a_modulation = nn.Sequential(
       nn.AdaptiveAvgPool2d((1, 1)),
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
+      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     )
     self.global_b_modulation = nn.Sequential(
       nn.AdaptiveAvgPool2d((1, 1)),
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
+      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     )
-    self.voxelwise_a_modulation = nn.Sequential(
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation, 
-    )
-    self.voxelwise_b_modulation = nn.Sequential(
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation, 
-    )
+    self.voxelwise_a_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
+    self.voxelwise_b_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     # self.learnable_sc = in_channels != out_channels or upsample
     # if self.learnable_sc:
     #   self.conv_sc = self.which_conv(in_channels, out_channels, 

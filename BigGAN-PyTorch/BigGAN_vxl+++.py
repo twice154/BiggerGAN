@@ -285,17 +285,14 @@ class Generator(nn.Module):
     # Loop over blocks
     for index, blocklist in enumerate(self.blocks):
       # Spatial modulation calculation
-      spatial_h, global_a_mod, global_b_mod, voxelwise_a_mod, voxelwise_b_mod = self.spatial_modulation_blocks[index][0](spatial_h)
+      spatial_h, mod = self.spatial_modulation_blocks[index][0](spatial_h)
       # Second inner loop in case block has multiple layers
       for block in blocklist:
         # Main layer forward
         h = block(h, ys[index])
-      # Most coarse modulation
-      h = (h - torch.mean(h, dim=(2, 3), keepdim=True)) / torch.std(h, dim=(2, 3), keepdim=True)
-      h = h * (1 + global_a_mod.repeat(1, 1, h.shape[2], h.shape[3])) + global_b_mod.repeat(1, 1, h.shape[2], h.shape[3])
-      # Most fine modulation
-      h = (h - torch.mean(h, dim=(1, 2, 3), keepdim=True)) / torch.std(h, dim=(1, 2, 3), keepdim=True)
-      h = h * (1 + voxelwise_a_mod) + voxelwise_b_mod
+      # Spatial modulation
+      h = h / torch.std(h, dim=(1, 2, 3), keepdim=True)
+      h = h * (1 + mod)
         
     # Apply batchnorm-relu-conv-tanh at output
     return torch.tanh(self.output_layer(h))

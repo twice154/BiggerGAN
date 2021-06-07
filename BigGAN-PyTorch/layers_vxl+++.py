@@ -422,33 +422,7 @@ class SpatialModulationGBlock(nn.Module):
     # Conv layers
     self.conv1 = self.which_conv(self.in_channels, self.out_channels)
     self.conv2 = self.which_conv(self.out_channels, self.out_channels)
-    # Modulation layers
-    self.global_a_modulation = nn.Sequential(
-      nn.AdaptiveAvgPool2d((1, 1)),
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
-    )
-    self.global_b_modulation = nn.Sequential(
-      nn.AdaptiveAvgPool2d((1, 1)),
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0),
-      activation,
-    )
-    self.voxelwise_a_modulation = nn.Sequential(
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation, 
-    )
-    self.voxelwise_b_modulation = nn.Sequential(
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation,
-      self.which_conv(self.out_channels, self.out_channels, kernel_size=3, padding=1),
-      activation, 
-    )
+    self.modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     # self.learnable_sc = in_channels != out_channels or upsample
     # if self.learnable_sc:
     #   self.conv_sc = self.which_conv(in_channels, out_channels, 
@@ -467,14 +441,11 @@ class SpatialModulationGBlock(nn.Module):
     h = self.conv1(h)
     h = self.activation(h)
     h = self.conv2(h)
-
-    global_a_mod = self.global_a_modulation(h)
-    global_b_mod = self.global_b_modulation(h)
-    voxelwise_a_mod = self.voxelwise_a_modulation(h)
-    voxelwise_b_mod = self.voxelwise_b_modulation(h)
+    mod = self.modulation(h)
+    # mod = mod.repeat(1, 4, 1, 1)
     # if self.learnable_sc:       
     #   x = self.conv_sc(x)
-    return h, global_a_mod, global_b_mod, voxelwise_a_mod, voxelwise_b_mod
+    return h, mod
     
     
 # Residual block for the discriminator
