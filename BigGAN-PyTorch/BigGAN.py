@@ -156,14 +156,24 @@ class Generator(nn.Module):
     # to be over blocks at a given resolution (resblocks and/or self-attention)
     # while the inner loop is over a given block
     self.blocks = []
+    # 64x64 case, index is 3
     for index in range(len(self.arch['out_channels'])):
-      self.blocks += [[layers.GBlock(in_channels=self.arch['in_channels'][index],
-                             out_channels=self.arch['out_channels'][index],
-                             which_conv=self.which_conv,
-                             which_bn=self.which_bn,
-                             activation=self.activation,
-                             upsample=(functools.partial(F.interpolate, scale_factor=2)
-                                       if self.arch['upsample'][index] else None))]]
+      if index == 2:
+        self.blocks += [[layers.GBlock(in_channels=self.arch['in_channels'][index],
+                              out_channels=self.arch['out_channels'][index],
+                              which_conv=self.which_conv,
+                              which_bn=self.which_bn,
+                              activation=self.activation,
+                              upsample=(functools.partial(F.interpolate, scale_factor=2)
+                                        if self.arch['upsample'][index] else None), attentive=True)]]
+      else:
+        self.blocks += [[layers.GBlock(in_channels=self.arch['in_channels'][index],
+                              out_channels=self.arch['out_channels'][index],
+                              which_conv=self.which_conv,
+                              which_bn=self.which_bn,
+                              activation=self.activation,
+                              upsample=(functools.partial(F.interpolate, scale_factor=2)
+                                        if self.arch['upsample'][index] else None), attentive=False)]]
 
       # If attention on this block, attach it to the end
       if self.arch['attention'][self.arch['resolution'][index]]:
@@ -283,19 +293,19 @@ class Generator(nn.Module):
     h = h.view(h.size(0), -1, self.bottom_width, self.bottom_width)
     
     # Loop over blocks
-    for index, blocklist in enumerate(self.blocks):
-      # Spatial modulation calculation
-      spatial_h, global_a_mod, global_b_mod, voxelwise_a_mod, voxelwise_b_mod = self.spatial_modulation_blocks[index][0](spatial_h)
+    for index, (blocklist, spatial_modulation_blocklist) in enumerate(zip(self.blocks, self.spatial_modulation_blocks)):
       # Second inner loop in case block has multiple layers
-      for block in blocklist:
+      for i, (block, spatial_modulation_block) in enumerate(zip(blocklist, spatial_modulation_blocklist)):
+        # Spatial modulation calculation
+        spatial_h, voxelwise_a_mod, voxelwise_b_mod = spatial_modulation_block(spatial_h)
         # Main layer forward
-        h = block(h, ys[index])
+        h = block(h, ys[index], voxelwise_a_mod, voxelwise_b_mod)
       # Most coarse modulation
-      h = (h - torch.mean(h, dim=(2, 3), keepdim=True)) / torch.std(h, dim=(2, 3), keepdim=True)
-      h = h * (1 + global_a_mod.repeat(1, 1, h.shape[2], h.shape[3])) + global_b_mod.repeat(1, 1, h.shape[2], h.shape[3])
+      # h = (h - torch.mean(h, dim=(2, 3), keepdim=True)) / torch.std(h, dim=(2, 3), keepdim=True)
+      # h = h * (1 + global_a_mod.repeat(1, 1, h.shape[2], h.shape[3])) + global_b_mod.repeat(1, 1, h.shape[2], h.shape[3])
       # Most fine modulation
-      h = (h - torch.mean(h, dim=(1, 2, 3), keepdim=True)) / torch.std(h, dim=(1, 2, 3), keepdim=True)
-      h = h * (1 + voxelwise_a_mod) + voxelwise_b_mod
+      # h = (h - torch.mean(h, dim=(1, 2, 3), keepdim=True)) / torch.std(h, dim=(1, 2, 3), keepdim=True)
+      # h = h * (1 + voxelwise_a_mod) + voxelwise_b_mod
         
     # Apply batchnorm-relu-conv-tanh at output
     return torch.tanh(self.output_layer(h))

@@ -132,15 +132,15 @@ class Generator(nn.Module):
     # We use a non-spectral-normed embedding here regardless;
     # For some reason applying SN to G's embedding seems to randomly cripple G
     self.which_embedding = nn.Embedding
-    bn_linear = (functools.partial(self.which_linear, bias=False) if self.G_shared
-                 else self.which_embedding)
-    self.which_bn = functools.partial(layers.ccbn,
-                          which_linear=bn_linear,
+    # bn_linear = (functools.partial(self.which_linear, bias=False) if self.G_shared
+    #              else self.which_embedding)
+    self.which_bn = functools.partial(layers.bn,
+                          # which_linear=bn_linear,
                           cross_replica=self.cross_replica,
                           mybn=self.mybn,
-                          input_size=(self.shared_dim + self.z_chunk_size if self.G_shared
-                                      else self.n_classes),
-                          norm_style=self.norm_style,
+                          # input_size=(self.shared_dim + self.z_chunk_size if self.G_shared
+                          #             else self.n_classes),
+                          # norm_style=self.norm_style,
                           eps=self.BN_eps)
 
 
@@ -285,14 +285,14 @@ class Generator(nn.Module):
     # Loop over blocks
     for index, blocklist in enumerate(self.blocks):
       # Spatial modulation calculation
-      spatial_h, voxelwise_a_mod, voxelwise_b_mod = self.spatial_modulation_blocks[index][0](spatial_h)
+      spatial_h, global_a_mod, global_b_mod, voxelwise_a_mod, voxelwise_b_mod = self.spatial_modulation_blocks[index][0](spatial_h)
       # Second inner loop in case block has multiple layers
       for block in blocklist:
         # Main layer forward
         h = block(h, ys[index])
       # Most coarse modulation
-      # h = (h - torch.mean(h, dim=(2, 3), keepdim=True)) / torch.std(h, dim=(2, 3), keepdim=True)
-      # h = h * (1 + global_a_mod.repeat(1, 1, h.shape[2], h.shape[3])) + global_b_mod.repeat(1, 1, h.shape[2], h.shape[3])
+      h = (h - torch.mean(h, dim=(2, 3), keepdim=True)) / torch.std(h, dim=(2, 3), keepdim=True)
+      h = h * (1 + global_a_mod.repeat(1, 1, h.shape[2], h.shape[3])) + global_b_mod.repeat(1, 1, h.shape[2], h.shape[3])
       # Most fine modulation
       h = (h - torch.mean(h, dim=(1, 2, 3), keepdim=True)) / torch.std(h, dim=(1, 2, 3), keepdim=True)
       h = h * (1 + voxelwise_a_mod) + voxelwise_b_mod

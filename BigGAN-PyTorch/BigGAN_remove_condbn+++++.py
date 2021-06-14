@@ -132,15 +132,15 @@ class Generator(nn.Module):
     # We use a non-spectral-normed embedding here regardless;
     # For some reason applying SN to G's embedding seems to randomly cripple G
     self.which_embedding = nn.Embedding
-    bn_linear = (functools.partial(self.which_linear, bias=False) if self.G_shared
-                 else self.which_embedding)
-    self.which_bn = functools.partial(layers.ccbn,
-                          which_linear=bn_linear,
+    # bn_linear = (functools.partial(self.which_linear, bias=False) if self.G_shared
+    #              else self.which_embedding)
+    self.which_bn = functools.partial(layers.bn,
+                          # which_linear=bn_linear,
                           cross_replica=self.cross_replica,
                           mybn=self.mybn,
-                          input_size=(self.shared_dim + self.z_chunk_size if self.G_shared
-                                      else self.n_classes),
-                          norm_style=self.norm_style,
+                          # input_size=(self.shared_dim + self.z_chunk_size if self.G_shared
+                          #             else self.n_classes),
+                          # norm_style=self.norm_style,
                           eps=self.BN_eps)
 
 
