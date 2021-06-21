@@ -14,4 +14,4 @@ python BigGAN-PyTorch/train.py \
 --test_every 5000 --save_every 1000 --num_best_copies 5 --num_save_copies 2 --seed 0 \
 --which_best FID --num_iters 1000000 --num_epochs 1000 \
 --embedding inceptionv3 --density_measure gaussian --retention_ratio 100 \
---experiment_name sagan_res64_ch32_batch128_rr100_attentive_blk2_n16_northo
+--experiment_name sagan_res64_ch32_batch128_rr100_attsetpmod+blk32n16xortho
