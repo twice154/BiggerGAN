@@ -158,7 +158,7 @@ class Generator(nn.Module):
     self.blocks = []
     # 64x64 case, index is 3
     for index in range(len(self.arch['out_channels'])):
-      if index == 3:
+      if index == 2:
         self.blocks += [[layers.GBlock(in_channels=self.arch['in_channels'][index],
                               out_channels=self.arch['out_channels'][index],
                               which_conv=self.which_conv,
@@ -204,25 +204,25 @@ class Generator(nn.Module):
     # while the inner loop is over a given block
     self.spatial_modulation_blocks = []
     for index in range(len(self.arch['out_channels'])):
-      if index == 3:
-        self.spatial_modulation_blocks += [[layers.SpatialModulationGBlock(in_channels=self.arch['in_channels'][index],
-                              out_channels=self.arch['out_channels'][index],
-                              which_conv=self.which_conv,
-                              which_bn=self.which_bn,
-                              activation=self.activation,
-                              upsample=(functools.partial(F.interpolate, scale_factor=2)
-                                        if self.arch['upsample'][index] else None), attentive=True)]]
-      else:
-        self.spatial_modulation_blocks += [[layers.SpatialModulationGBlock(in_channels=self.arch['in_channels'][index],
-                              out_channels=self.arch['out_channels'][index],
-                              which_conv=self.which_conv,
-                              which_bn=self.which_bn,
-                              activation=self.activation,
-                              upsample=(functools.partial(F.interpolate, scale_factor=2)
-                                        if self.arch['upsample'][index] else None), attentive=False)]]
+      self.spatial_modulation_blocks += [[layers.SpatialModulationGBlock(in_channels=self.arch['in_channels'][index],
+                            out_channels=self.arch['out_channels'][index],
+                            which_conv=self.which_conv,
+                            which_bn=self.which_bn,
+                            activation=self.activation,
+                            upsample=(functools.partial(F.interpolate, scale_factor=2)
+                                      if self.arch['upsample'][index] else None))]]
 
     # Turn self.blocks into a ModuleList so that it's all properly registered.
     self.spatial_modulation_blocks = nn.ModuleList([nn.ModuleList(block) for block in self.spatial_modulation_blocks])
+
+
+    # self.attentive_spatial_modulation_block = layers.AttentiveSpatialModulationGBlock(in_channels=self.arch['in_channels'][0],
+    #                           out_channels=self.arch['out_channels'][2],
+    #                           which_conv=self.which_conv,
+    #                           which_bn=self.which_bn,
+    #                           activation=self.activation,
+    #                           upsample=(functools.partial(F.interpolate, scale_factor=2)  # 8 to 32
+    #                                     if True else None))
 
 
     # Initialize weights. Optionally skip init for testing.
@@ -293,8 +293,12 @@ class Generator(nn.Module):
       if len(spatial_c.shape) == 3:
         spatial_c = torch.squeeze(spatial_c, dim=1)
       spatial_h = self.spatial_modulation_linear(torch.cat([spatial_c, z], 1))
-      # Reshape
+      # Reshape to 512 x 4 x 4
       spatial_h = spatial_h.view(spatial_h.size(0), -1, self.bottom_width, self.bottom_width)
+      # Attentive modulation parameter generation
+      #  voxelwise_a1_mod, voxelwise_b1_mod = self.attentive_spatial_modulation_block(spatial_h)
+      voxelwise_a1_mod = None
+      voxelwise_b1_mod = None
       
     # First linear layer
     h = self.linear(z)
@@ -306,7 +310,7 @@ class Generator(nn.Module):
       # Second inner loop in case block has multiple layers
       for i, (block, spatial_modulation_block) in enumerate(zip(blocklist, spatial_modulation_blocklist)):
         # Spatial modulation calculation
-        spatial_h, voxelwise_a_mod, voxelwise_b_mod, voxelwise_a1_mod, voxelwise_b1_mod = spatial_modulation_block(spatial_h)
+        spatial_h, voxelwise_a_mod, voxelwise_b_mod = spatial_modulation_block(spatial_h)
         # Main layer forward
         h = block(h, ys[index], voxelwise_a_mod, voxelwise_b_mod, voxelwise_a1_mod, voxelwise_b1_mod)
       # Most coarse modulation

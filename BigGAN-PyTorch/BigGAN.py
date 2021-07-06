@@ -218,11 +218,8 @@ class Generator(nn.Module):
 
     self.attentive_spatial_modulation_block = layers.AttentiveSpatialModulationGBlock(in_channels=self.arch['in_channels'][0],
                               out_channels=self.arch['out_channels'][2],
-                              which_conv=self.which_conv,
-                              which_bn=self.which_bn,
-                              activation=self.activation,
-                              upsample=(functools.partial(F.interpolate, scale_factor=2)  # 8 to 32
-                                        if True else None))
+                              which_linear=self.which_linear,
+                              activation=self.activation)
 
 
     # Initialize weights. Optionally skip init for testing.
@@ -293,10 +290,10 @@ class Generator(nn.Module):
       if len(spatial_c.shape) == 3:
         spatial_c = torch.squeeze(spatial_c, dim=1)
       spatial_h = self.spatial_modulation_linear(torch.cat([spatial_c, z], 1))
-      # Reshape to 512 x 4 x 4
-      spatial_h = spatial_h.view(spatial_h.size(0), -1, self.bottom_width, self.bottom_width)
       # Attentive modulation parameter generation
       voxelwise_a1_mod, voxelwise_b1_mod = self.attentive_spatial_modulation_block(spatial_h)
+      # Reshape to 512 x 4 x 4
+      spatial_h = spatial_h.view(spatial_h.size(0), -1, self.bottom_width, self.bottom_width)
       
     # First linear layer
     h = self.linear(z)

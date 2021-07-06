@@ -399,7 +399,7 @@ class GBlock(nn.Module):
     if attentive:
       # Attentive layers - https://github.com/dvlab-research/AttenNorm/blob/master/inpaint-attnorm/net/network.py
       # Variables
-      self.nClass = 8
+      self.nClass = 16
       self.kama = 10
       self.orth_lambda = 0.001
       # KQV
@@ -495,7 +495,6 @@ class GBlock(nn.Module):
     # Spatial Self-modulation
     h = (h - torch.mean(h, dim=(1, 2, 3), keepdim=True)) / torch.std(h, dim=(1, 2, 3), keepdim=True)
     h = h * (1 + voxelwise_a_mod) + voxelwise_b_mod
-
     return h
   
 
@@ -503,22 +502,17 @@ class GBlock(nn.Module):
 class SpatialModulationGBlock(nn.Module):
   def __init__(self, in_channels, out_channels,
                which_conv=nn.Conv2d, which_bn=bn, activation=None, 
-               upsample=None, attentive=False):
+               upsample=None):
     super(SpatialModulationGBlock, self).__init__()
     
     self.in_channels, self.out_channels = in_channels, out_channels
     self.which_conv, self.which_bn = which_conv, which_bn
     self.activation = activation
     self.upsample = upsample
-    self.attentive = attentive
     # Conv layers
     self.conv1 = self.which_conv(self.in_channels, self.out_channels)
     self.conv2 = self.which_conv(self.out_channels, self.out_channels)
     # Modulation layers
-    if attentive:
-      self.voxelwise_a1_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
-      self.voxelwise_b1_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
-
     self.voxelwise_a_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     self.voxelwise_b_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     # self.learnable_sc = in_channels != out_channels or upsample
@@ -538,10 +532,6 @@ class SpatialModulationGBlock(nn.Module):
       # x = self.upsample(x)
     h = self.conv1(h)
 
-    if self.attentive:
-      voxelwise_a1_mod = self.voxelwise_a1_modulation(h)
-      voxelwise_b1_mod = self.voxelwise_b1_modulation(h)
-
     h = self.activation(h)
     h = self.conv2(h)
 
@@ -549,10 +539,64 @@ class SpatialModulationGBlock(nn.Module):
     voxelwise_b_mod = self.voxelwise_b_modulation(h)
     # if self.learnable_sc:       
     #   x = self.conv_sc(x)
-    if self.attentive:
-      return h, voxelwise_a_mod, voxelwise_b_mod, voxelwise_a1_mod, voxelwise_b1_mod
-    else:
-      return h, voxelwise_a_mod, voxelwise_b_mod, None, None
+    return h, voxelwise_a_mod, voxelwise_b_mod
+
+
+# AttentiveSpatialModulationBlock for G.
+class AttentiveSpatialModulationGBlock(nn.Module):
+  def __init__(self, in_channels, out_channels,
+               which_conv=nn.Conv2d, which_bn=bn, activation=None, 
+               upsample=None):
+    super(AttentiveSpatialModulationGBlock, self).__init__()
+    
+    self.in_channels, self.out_channels = in_channels, out_channels
+    self.which_conv, self.which_bn = which_conv, which_bn
+    self.activation = activation
+    self.upsample = upsample
+    # Conv layers
+    self.conv1 = self.which_conv(self.in_channels, self.out_channels)
+    self.conv2 = self.which_conv(self.out_channels, self.out_channels)
+    self.conv3 = self.which_conv(self.out_channels, self.out_channels)
+    # Modulation layers
+    self.voxelwise_a_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
+    self.voxelwise_b_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
+    # self.learnable_sc = in_channels != out_channels or upsample
+    # if self.learnable_sc:
+    #   self.conv_sc = self.which_conv(in_channels, out_channels, 
+    #                                  kernel_size=1, padding=0)
+    # Batchnorm layers
+    # self.bn1 = self.which_bn(in_channels)
+    # self.bn2 = self.which_bn(out_channels)
+    # upsample layers
+    self.upsample = upsample
+
+  def forward(self, x):
+    h = self.activation(x)
+    # 4 to 8
+    if self.upsample:
+      h = self.upsample(h)
+      # x = self.upsample(x)
+    h = self.conv1(h)
+
+    h = self.activation(h)
+    # 8 to 16
+    if self.upsample:
+      h = self.upsample(h)
+      # x = self.upsample(x)
+    h = self.conv2(h)
+
+    h = self.activation(h)
+    # 16 to 32
+    if self.upsample:
+      h = self.upsample(h)
+      # x = self.upsample(x)
+    h = self.conv3(h)
+
+    voxelwise_a_mod = self.voxelwise_a_modulation(h)
+    voxelwise_b_mod = self.voxelwise_b_modulation(h)
+    # if self.learnable_sc:       
+    #   x = self.conv_sc(x)
+    return voxelwise_a_mod, voxelwise_b_mod
     
     
 # Residual block for the discriminator
