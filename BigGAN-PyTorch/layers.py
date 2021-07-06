@@ -375,14 +375,13 @@ class bn(nn.Module):
 class GBlock(nn.Module):
   def __init__(self, in_channels, out_channels,
                which_conv=nn.Conv2d, which_bn=bn, activation=None, 
-               upsample=None, attentive=False):
+               upsample=None):
     super(GBlock, self).__init__()
     
     self.in_channels, self.out_channels = in_channels, out_channels
     self.which_conv, self.which_bn = which_conv, which_bn
     self.activation = activation
     self.upsample = upsample
-    self.attentive = attentive
     # Conv layers
     self.conv1 = self.which_conv(self.in_channels, self.out_channels)
     self.conv2 = self.which_conv(self.out_channels, self.out_channels)
@@ -396,106 +395,17 @@ class GBlock(nn.Module):
     # upsample layers
     self.upsample = upsample
 
-    if attentive:
-      # Attentive layers - https://github.com/dvlab-research/AttenNorm/blob/master/inpaint-attnorm/net/network.py
-      # Variables
-      self.nClass = 8
-      self.kama = 10
-      self.orth_lambda = 0.001
-      # KQV
-      self.conv_xk = self.which_conv(self.out_channels, int(self.out_channels / 8), kernel_size=1, padding=0)
-      self.conv_xq = self.which_conv(self.out_channels, int(self.out_channels / 8), kernel_size=1, padding=0)
-      self.conv_xv = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
-      # orthogonality
-      # self.x_mask_filters = torch.normal(0, 1, size=(1, 1, self.out_channels, self.nClass))
-      # self.x_mask_filters.requires_grad = True
-      self.conv_x_mask = self.which_conv(self.out_channels, self.nClass, kernel_size=1, padding=0, bias=False)
-      # self.conv_x_mask.weight = self.x_mask_filters
-      # self-sampling
-      self.alpha = nn.Parameter((torch.ones(1, self.nClass, 1, 1) * 0.1))
-      self.softmax = nn.Softmax(dim=1)
-      # residual
-      self.sigma = nn.Parameter(torch.zeros(1))
-
-  def forward(self, x, y, voxelwise_a_mod, voxelwise_b_mod, voxelwise_a1_mod, voxelwise_b1_mod):
+  def forward(self, x, y):
     h = self.activation(self.bn1(x, y))
     if self.upsample:
       h = self.upsample(h)
       x = self.upsample(x)
     h = self.conv1(h)
-
-    if self.attentive:
-      # Attentive Spatial Self-modulation - https://github.com/dvlab-research/AttenNorm/blob/master/inpaint-attnorm/net/network.py
-      # KQV
-      xk = self.conv_xk(h)
-      xq = self.conv_xq(h)
-      xv = self.conv_xv(h)
-
-      # orthogonality
-      # PyTorch Feature Map  ->  BATCH x CHANNEL x WIDTH x HEIGHT
-      # PyTorch Weight  ->  OUT_CHANNEL X IN_CHANNEL X KERNEL_SIZE X KERNEL_SIZE
-      # TensorFlow Feature Map  ->  BATCH x WIDTH x HEIGHT x CHANNEL
-      # TensorFlow Weight  ->  KERNEL_SIZE X KERNEL_SIZE X IN_CHANNEL X OUT_CHANNEL
-      x_mask = self.conv_x_mask(h)
-      mask_w = torch.reshape(self.conv_x_mask.weight, (self.out_channels, self.nClass))
-      mask_w_sym_T = torch.reshape(mask_w.T, (1, self.nClass, self.out_channels))
-      mask_w_sym = torch.reshape(mask_w, (1, self.out_channels, self.nClass))
-      sym = torch.matmul(mask_w_sym_T, mask_w_sym)
-      sym -= torch.reshape(torch.eye(self.nClass).cuda(), (1, self.nClass, self.nClass))
-      # orthogonality loss function. if want to optimize, return and add to loss function
-      ortho_loss = self.orth_lambda * torch.sum(torch.mean(sym, dim=0))
-
-      # self-sampling
-      # PyTorch Feature Map  ->  BATCH x CHANNEL x WIDTH x HEIGHT
-      # PyTorch Weight  ->  OUT_CHANNEL X IN_CHANNEL X KERNEL_SIZE X KERNEL_SIZE
-      # TensorFlow Feature Map  ->  BATCH x WIDTH x HEIGHT x CHANNEL
-      # TensorFlow Weight  ->  KERNEL_SIZE X KERNEL_SIZE X IN_CHANNEL X OUT_CHANNEL
-      sampling_pos = torch.multinomial(torch.ones(1, h.shape[2] * h.shape[3]) * 0.5, self.nClass).cuda()
-      sampling_pos = torch.squeeze(sampling_pos, dim=0)
-
-      xk_reshaped = torch.reshape(xk, (h.shape[0], h.shape[2] * h.shape[3], int(self.out_channels / 8)))
-      fast_filters = torch.index_select(xk_reshaped, 1, sampling_pos)
-      fast_filters = torch.reshape(fast_filters, (h.shape[0], int(self.out_channels / 8), self.nClass))
-
-      xq_reshaped = torch.reshape(xq, (h.shape[0], h.shape[2] * h.shape[3], int(self.out_channels / 8)))
-      fast_activations = torch.matmul(xq_reshaped, fast_filters)
-      fast_activations = torch.reshape(fast_activations, (h.shape[0], self.nClass, h.shape[2], h.shape[3]))
-
-      # calculate per-pixel class-included weights
-      layout = self.softmax((torch.clamp(self.alpha, min=0.0, max=1.0) * fast_activations + x_mask) / self.kama)  # BATCH X NCLASS X WIDTH X HEIGHT
-
-      # normalization
-      layout_expand = torch.reshape(layout, (layout.shape[0], layout.shape[1], 1, layout.shape[2], layout.shape[3]))  # BATCH X NCLASS X 1 X WIDTH X HEIGHT
-      cnt = torch.sum(layout_expand, (3, 4), keepdim=True)
-      xv_expand = torch.reshape(xv, (xv.shape[0], 1, xv.shape[1], xv.shape[2], xv.shape[3])).repeat(1, self.nClass, 1, 1, 1)
-      hot_area = xv_expand * layout_expand
-      xv_mean = torch.mean(hot_area, (3, 4), keepdim=True) / cnt
-      xv_std = torch.sqrt(torch.sum((hot_area - xv_mean) ** 2, (3, 4), keepdim=True) / cnt)
-      xn = torch.sum((xv_expand - xv_mean) / xv_std * layout_expand * voxelwise_a1_mod + voxelwise_b1_mod, axis=1)
-
-      # residual
-      h = h + self.sigma * xn
-
-      # modulation: normalization에서 feature map에 대해서 수행했던 operation을 modulation map에 대해서 그대로 수행하면 된다.
-      # h_expand = torch.reshape(h, (h.shape[0], 1, h.shape[1], h.shape[2], h.shape[3])).repeat(1, self.nClass, 1, 1, 1)
-      # voxelwise_a1_mod_expand = torch.reshape(voxelwise_a1_mod, (voxelwise_a1_mod.shape[0], 1, voxelwise_a1_mod.shape[1], voxelwise_a1_mod.shape[2], voxelwise_a1_mod.shape[3])).repeat(1, self.nClass, 1, 1, 1)
-      # hot_area_a1 = voxelwise_a1_mod_expand * layout_expand
-      # voxelwise_a1_modn = torch.mean(hot_area_a1, (3, 4), keepdim=True)
-      # voxelwise_b1_mod_expand = torch.reshape(voxelwise_b1_mod, (voxelwise_b1_mod.shape[0], 1, voxelwise_b1_mod.shape[1], voxelwise_b1_mod.shape[2], voxelwise_b1_mod.shape[3])).repeat(1, self.nClass, 1, 1, 1)
-      # hot_area_b1 = voxelwise_b1_mod_expand * layout_expand
-      # voxelwise_b1_modn = torch.mean(hot_area_b1, (3, 4), keepdim=True)
-      # h = torch.sum(((h_expand * (1 + voxelwise_a1_modn)) + voxelwise_b1_modn) * layout_expand, axis=1)
-
     h = self.activation(self.bn2(h, y))
     h = self.conv2(h)
     if self.learnable_sc:       
       x = self.conv_sc(x)
-    h = h + x
-
-    # Spatial Self-modulation
-    h = (h - torch.mean(h, dim=(1, 2, 3), keepdim=True)) / torch.std(h, dim=(1, 2, 3), keepdim=True)
-    h = h * (1 + voxelwise_a_mod) + voxelwise_b_mod
-    return h
+    return h + x
   
 
 # SpatialModulationBlock for G.
@@ -513,6 +423,14 @@ class SpatialModulationGBlock(nn.Module):
     self.conv1 = self.which_conv(self.in_channels, self.out_channels)
     self.conv2 = self.which_conv(self.out_channels, self.out_channels)
     # Modulation layers
+    # self.global_a_modulation = nn.Sequential(
+    #   nn.AdaptiveAvgPool2d((1, 1)),
+    #   self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
+    # )
+    # self.global_b_modulation = nn.Sequential(
+    #   nn.AdaptiveAvgPool2d((1, 1)),
+    #   self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
+    # )
     self.voxelwise_a_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     self.voxelwise_b_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
     # self.learnable_sc = in_channels != out_channels or upsample
@@ -531,102 +449,16 @@ class SpatialModulationGBlock(nn.Module):
       h = self.upsample(h)
       # x = self.upsample(x)
     h = self.conv1(h)
-
     h = self.activation(h)
     h = self.conv2(h)
 
+    # global_a_mod = self.global_a_modulation(h)
+    # global_b_mod = self.global_b_modulation(h)
     voxelwise_a_mod = self.voxelwise_a_modulation(h)
     voxelwise_b_mod = self.voxelwise_b_modulation(h)
     # if self.learnable_sc:       
     #   x = self.conv_sc(x)
     return h, voxelwise_a_mod, voxelwise_b_mod
-
-
-# AttentiveSpatialModulationBlock for G.
-class AttentiveSpatialModulationGBlock(nn.Module):
-  def __init__(self, in_channels, out_channels,
-               which_linear, activation=None):
-    super(AttentiveSpatialModulationGBlock, self).__init__()
-    
-    self.nClass = 8
-    self.in_channels, self.out_channels = in_channels, out_channels
-    self.which_linear = which_linear
-    self.activation = activation
-    # Linear layers : have to code dynamic later, 512x4x4(128x64) to 128x8
-    self.num_linear = int(out_channels / in_channels * self.nClass)
-    self.linear1 = which_linear(self.in_channels * 4 * 4, int(self.in_channels * 4 * 4 / 2))
-    self.linear2 = which_linear(int(self.in_channels * 4 * 4 / 2), int(self.in_channels * 4 * 4 / 4))
-    self.linear3a = which_linear(int(self.in_channels * 4 * 4 / 4), int(self.in_channels * 4 * 4 / 8))
-    self.linear3b = which_linear(int(self.in_channels * 4 * 4 / 4), int(self.in_channels * 4 * 4 / 8))
-
-  def forward(self, x):
-    h = self.activation(x)
-    h = self.linear1(h)
-
-    h = self.activation(h)
-    h = self.linear2(h)
-
-    h = self.activation(h)
-    voxelwise_a_mod = self.linear3a(h)
-    voxelwise_a_mod = voxelwise_a_mod.reshape(voxelwise_a_mod.shape[0], self.nClass, -1, 1, 1)
-    voxelwise_b_mod = self.linear3b(h)
-    voxelwise_b_mod = voxelwise_b_mod.reshape(voxelwise_b_mod.shape[0], self.nClass, -1, 1, 1)
-
-    return voxelwise_a_mod, voxelwise_b_mod
-# class AttentiveSpatialModulationGBlock(nn.Module):
-#   def __init__(self, in_channels, out_channels,
-#                which_conv=nn.Conv2d, which_bn=bn, activation=None, 
-#                upsample=None):
-#     super(AttentiveSpatialModulationGBlock, self).__init__()
-    
-#     self.in_channels, self.out_channels = in_channels, out_channels
-#     self.which_conv, self.which_bn = which_conv, which_bn
-#     self.activation = activation
-#     self.upsample = upsample
-#     # Conv layers
-#     self.conv1 = self.which_conv(self.in_channels, self.out_channels)
-#     self.conv2 = self.which_conv(self.out_channels, self.out_channels)
-#     self.conv3 = self.which_conv(self.out_channels, self.out_channels)
-#     # Modulation layers
-#     self.voxelwise_a_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
-#     self.voxelwise_b_modulation = self.which_conv(self.out_channels, self.out_channels, kernel_size=1, padding=0)
-#     # self.learnable_sc = in_channels != out_channels or upsample
-#     # if self.learnable_sc:
-#     #   self.conv_sc = self.which_conv(in_channels, out_channels, 
-#     #                                  kernel_size=1, padding=0)
-#     # Batchnorm layers
-#     # self.bn1 = self.which_bn(in_channels)
-#     # self.bn2 = self.which_bn(out_channels)
-#     # upsample layers
-#     self.upsample = upsample
-
-#   def forward(self, x):
-#     h = self.activation(x)
-#     # 4 to 8
-#     if self.upsample:
-#       h = self.upsample(h)
-#       # x = self.upsample(x)
-#     h = self.conv1(h)
-
-#     h = self.activation(h)
-#     # 8 to 16
-#     if self.upsample:
-#       h = self.upsample(h)
-#       # x = self.upsample(x)
-#     h = self.conv2(h)
-
-#     h = self.activation(h)
-#     # 16 to 32
-#     if self.upsample:
-#       h = self.upsample(h)
-#       # x = self.upsample(x)
-#     h = self.conv3(h)
-
-#     voxelwise_a_mod = self.voxelwise_a_modulation(h)
-#     voxelwise_b_mod = self.voxelwise_b_modulation(h)
-#     # if self.learnable_sc:       
-#     #   x = self.conv_sc(x)
-#     return voxelwise_a_mod, voxelwise_b_mod
     
     
 # Residual block for the discriminator
