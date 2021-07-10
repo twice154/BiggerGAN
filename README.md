@@ -72,7 +72,7 @@ bash scripts/launch_SAGAN_res64_ch32_bs128_dstep_1_rr100.sh
 
 
 **[Notice!!]**  
-Due to computation resources, I experiment on SAGAN only. However, the architectural similarity between SAGAN & BigGAN implies this method could work on BigGAN. If anyone has experimented on BigGAN, I would really appreciate if you contact me.
+Due to computation resources, I experiment on SAGAN only. However, the architectural similarity between SAGAN & BigGAN implies this method could work on BigGAN, too. If anyone has experimented on BigGAN, I would really appreciate if you contact me.
 
 ## Citation
 
