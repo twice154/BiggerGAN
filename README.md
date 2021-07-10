@@ -1,4 +1,4 @@
-## Spatial Self-modulation on BigGAN
+# Spatial Self-modulation on BigGAN
 
 This repository contains project code of spatial-self-modulation-on-biggan.
 
