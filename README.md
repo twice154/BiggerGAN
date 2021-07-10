@@ -1,10 +1,16 @@
 ## Spatial Self-modulation on BigGAN
 
+This repository contains project code of spatial-self-modulation-on-biggan.
+
+**Contribution** of this proejct is
+* Improve BigGAN's generation quality on ImageNet by adding spatial self-modulation.
+
+#### Below is the architecture diagram that I implemented.
+![img](img_supernet.png)
+
 ## Requirements
 
 This repository starts from <a href="https://github.com/uoguelph-mlrg/instance_selection_for_gans">Instance Selection for GANs Official PyTorch Code</a>, and requirements are exactly same.
-
-## Overview
 
 ## Preparing ImageNet-64x64
 
@@ -21,6 +27,51 @@ bash scripts/launch_SAGAN_res64_ch32_bs128_dstep_1_rr100.sh
 ```
 
 ## Results on ImageNet-64x64
+
+**[Notice!!]**  
+Computation issue, I just experimented on imagenet-10, but the significant gain can generate iamagenet.
+
+</ul>
+<table>
+<thead>
+<tr>
+<th align="center">Metric</th>
+<th align="center">Ours</th>
+<th align="center">SAGAN</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="center">FID</td>
+<td align="center">14.31</td>
+<td align="center">15.70</td>
+</tr>
+<tr>
+<td align="center">IS</td>
+<td align="center">20.10</td>
+<td align="center">19.15</td>
+</tr>
+<tr>
+<td align="center">Precision</td>
+<td align="center">0.70</td>
+<td align="center">0.68</td>
+</tr> 
+<tr>
+<td align="center">Recall</td>
+<td align="center">0.69</td>
+<td align="center">0.69</td>
+</tr> 
+<tr>
+<td align="center">Density</td>
+<td align="center">0.77</td>
+<td align="center">0.75</td>
+</tr> 
+<tr>
+<td align="center">Coverage</td>
+<td align="center">0.77</td>
+<td align="center">0.74</td>
+</tr> 
+</tbody></table>
 
 ## Citation
 
