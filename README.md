@@ -6,7 +6,7 @@ This repository contains project code of spatial-self-modulation-on-biggan.
 * Improve BigGAN's generation quality on ImageNet by adding spatial self-modulation.
 
 #### Below is the architecture diagram that I implemented.
-![img](img_supernet.png)
+![img](img_arch.png)
 
 ## Requirements
 
@@ -27,9 +27,6 @@ bash scripts/launch_SAGAN_res64_ch32_bs128_dstep_1_rr100.sh
 ```
 
 ## Results on ImageNet-64x64
-
-**[Notice!!]**  
-Computation issue, I just experimented on imagenet-10, but the significant gain can generate iamagenet.
 
 </ul>
 <table>
@@ -72,6 +69,10 @@ Computation issue, I just experimented on imagenet-10, but the significant gain 
 <td align="center">0.74</td>
 </tr> 
 </tbody></table>
+
+
+**[Notice!!]**  
+Due to computation resources, I experiment on SAGAN only. However, the architectural similarity between SAGAN & BigGAN implies this method could work on BigGAN. If anyone has experimented on BigGAN, I would really appreciate if you contact me.
 
 ## Citation
 
