@@ -1,6 +1,6 @@
 # Spatial Self-modulation on BigGAN
 
-This repository contains project code of spatial-self-modulation-on-biggan.
+This repository contains project code of spatial-self-modulation-for-biggan.
 
 **Contribution** of this proejct is
 * Improve BigGAN's generation quality on ImageNet by adding spatial self-modulation.
